@@ -1,6 +1,5 @@
-function patch_data = PatchPlot(filename)
-    
-    filename = 'PatchBehav2024-10-21T14_49_27.4501760-04_00';
+function patch_data = PatchPlot(filename, makePlot)
+
     fid = fopen(filename, 'r');
     
     % Initialize variables
@@ -34,8 +33,9 @@ function patch_data = PatchPlot(filename)
         prob_str = parts{5};
         reward_probs = str2double(split(prob_str, ','));
         reward_probabilities(trial_count, :) = reward_probs;
-    
-    
+            
+
+
         % Determine trial was rewarded based on previous trial
         if trial_count == 1
             if str2double(rewardedTrialCount) == 1
@@ -64,6 +64,10 @@ function patch_data = PatchPlot(filename)
         end
     end
 
+    port_4_probs = zeros(length(reward_probabilities), 1);
+    reward_probabilities_all = [reward_probabilities(:, 1:4-1), port_4_probs, reward_probabilities(:, 4:end)];
+    reward_probabilities_all = reward_probabilities_all';
+
     fclose(fid);
 
     % create struct
@@ -71,65 +75,68 @@ function patch_data = PatchPlot(filename)
     patch_data.trial_numbers = trial_numbers;            
     patch_data.rewarded_trials = rewarded_trials;  % whether trial was rewarded (1 = rewarded, 0 = not)
     patch_data.licked_ports = licked_ports;             
-    patch_data.reward_probabilities = reward_probabilities;  
+    patch_data.reward_probabilities = reward_probabilities_all;  
     patch_data.patch_trials = patch_trial;    
     patch_data.patch_type = patch_type;
     patch_data.timestamps = timestamps_licks;
 
-    timestamps = patch_data.timestamps; 
-    licked_ports = patch_data.licked_ports;
-  
-    %LICKS AND PROBABILITIES
-    figure;
-    colormap(flipud(gray)); 
-    hold on;
+    if makePlot == 1  
+        timestamps = patch_data.timestamps; 
+        licked_ports = patch_data.licked_ports;
+      
+        
+        %LICKS AND PROBABILITIES
+        figure;
+        colormap(flipud(gray)); 
+        hold on;
+        
+        num_trials = length(reward_probabilities);
+        x_limits = [min(timestamps), max(timestamps)];
+        y_limits = [min(licked_ports), max(licked_ports)]; 
+        
+        %imagesc(x_limits, y_limits, repmat(reward_probabilities', [1, 2]), 'AlphaData', 0.8); % Transparencia del 30%
+        %set(gca, 'YDir', 'normal'); 
+        
+        plot(timestamps, licked_ports, 'Color', [0.5, 0.5, 0.5]);  
+        hold on;
+        
+        rewarded_indices = find(rewarded_trials == 1);
+        not_rewarded_indices = find(rewarded_trials == 0);
+        scatter(timestamps(rewarded_indices), licked_ports(rewarded_indices), 'g', 'filled');
+        scatter(timestamps(not_rewarded_indices), licked_ports(not_rewarded_indices), 'r', 'filled');
+        
+        xlabel('Timestamps');
+        ylabel('Licked Ports');
+        grid on;
     
-    num_trials = length(reward_probabilities);
-    x_limits = [min(timestamps), max(timestamps)];
-    y_limits = [min(licked_ports), max(licked_ports)]; 
+      
+        %LICKS OVER TIME
+        licks_matrix = [licked_ports', timestamps_licks'];
+        timeBin = 0.5*60*1000; %min x sec x ms
+        
+        max_time = max(timestamps);  
+        num_bins = ceil(max_time / timeBin);
     
-    %imagesc(x_limits, y_limits, repmat(reward_probabilities', [1, 2]), 'AlphaData', 0.8); % Transparencia del 30%
-    %set(gca, 'YDir', 'normal'); 
+        bin_edges = 0:timeBin:(num_bins * timeBin);
     
-    plot(timestamps, licked_ports, 'Color', [0.5, 0.5, 0.5]);  
-    hold on;
+        unique_ports = unique(licked_ports);
+        num_ports = length(unique_ports);
+        licks_per_bin = zeros(num_bins, num_ports);  % Matrix bins x ports
     
-    rewarded_indices = find(rewarded_trials == 1);
-    not_rewarded_indices = find(rewarded_trials == 0);
-    scatter(timestamps(rewarded_indices), licked_ports(rewarded_indices), 'g', 'filled');
-    scatter(timestamps(not_rewarded_indices), licked_ports(not_rewarded_indices), 'r', 'filled');
+        for i = 1:num_ports
+            port = unique_ports(i);
+            port_indices = licked_ports == port;
+            port_timestamps = timestamps(port_indices);
+            counts_per_bin = histcounts(port_timestamps, bin_edges);
+            licks_per_bin(:, i) = counts_per_bin';
+        end
     
-    xlabel('Timestamps');
-    ylabel('Licked Ports');
-    grid on;
-
-  
-    %LICKS OVER TIME
-    licks_matrix = [licked_ports', timestamps_licks'];
-    timeBin = 0.5*60*1000; %min x sec x ms
+        licksBin = licks_per_bin';
     
-    max_time = max(timestamps);  
-    num_bins = ceil(max_time / timeBin);
-
-    bin_edges = 0:timeBin:(num_bins * timeBin);
-
-    unique_ports = unique(licked_ports);
-    num_ports = length(unique_ports);
-    licks_per_bin = zeros(num_bins, num_ports);  % Matrix bins x ports
-
-    for i = 1:num_ports
-        port = unique_ports(i);
-        port_indices = licked_ports == port;
-        port_timestamps = timestamps(port_indices);
-        counts_per_bin = histcounts(port_timestamps, bin_edges);
-        licks_per_bin(:, i) = counts_per_bin';
+        figure;  
+        heatmap(licksBin, 'Colormap', parula);
+        xlabel('Ports');
+        ylabel('Bins');
     end
-
-    licksBin = licks_per_bin';
-
-    figure;  
-    heatmap(licksBin, 'Colormap', parula);
-    xlabel('Ports');
-    ylabel('Bins');
         
 end
